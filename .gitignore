@@ -1,0 +1,14 @@
+# Local environment files
+.env
+*.sqlite3
+__pycache__/
+# Django secret key and other sensitive config
+.settings_secret
+# Media / uploaded files
+media/
+# Virtual environment
+.venv/
+# OS specific
+.DS_Store
+Thumbs.db
+.env
