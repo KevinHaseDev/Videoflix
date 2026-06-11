@@ -60,11 +60,14 @@ class LoginView(APIView):
         user = serializer.validated_data['user']
         refresh = RefreshToken.for_user(user)
         response = Response(
-            {"detail": "Login successful", "user": {"id": user.id, "username": user.username}},
+            {"detail": "Login successful", "user": {
+                "id": user.id, "username": user.username}},
             status=status.HTTP_200_OK,
         )
-        response.set_cookie('access_token', str(refresh.access_token), **settings.AUTH_COOKIE_SETTINGS)
-        response.set_cookie('refresh_token', str(refresh), **settings.AUTH_COOKIE_SETTINGS)
+        response.set_cookie('access_token', str(
+            refresh.access_token), **settings.AUTH_COOKIE_SETTINGS)
+        response.set_cookie('refresh_token', str(refresh),
+                            **settings.AUTH_COOKIE_SETTINGS)
         return response
 
 
@@ -105,7 +108,8 @@ class CookieTokenRefreshView(APIView):
             {"detail": "Token refreshed", "access": access_token},
             status=status.HTTP_200_OK,
         )
-        response.set_cookie('access_token', access_token, **settings.AUTH_COOKIE_SETTINGS)
+        response.set_cookie('access_token', access_token,
+                            **settings.AUTH_COOKIE_SETTINGS)
         return response
 
 
@@ -115,7 +119,8 @@ class PasswordResetView(APIView):
     def post(self, request):
         serializer = PasswordResetSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        user = User.objects.filter(email=serializer.validated_data['email']).first()
+        user = User.objects.filter(
+            email=serializer.validated_data['email']).first()
         if user is not None:
             send_password_reset_email(user)
         return Response(
