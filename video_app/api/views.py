@@ -6,7 +6,7 @@ from django.http import FileResponse, Http404
 
 from video_app.models import Video
 from video_app.api.serializer import VideoSerializer
-from video_app.api.utils import get_m3u8_path
+from video_app.api.utils import get_m3u8_path, get_segment_path
 
 
 class VideoListView(ListAPIView):
@@ -27,8 +27,22 @@ class VideoM3U8View(APIView):
 
     permission_classes = [IsAuthenticated]
 
-    def get(self, request, movie_id, resolution):
+    def get(self, _request, movie_id, resolution):
+        """Return the HLS playlist file."""
         path = get_m3u8_path(movie_id, resolution)
         if not path.is_file():
             raise Http404
         return FileResponse(path.open('rb'), content_type='application/vnd.apple.mpegurl')
+
+
+class VideoSegmentView(APIView):
+    """Serves a single HLS transport stream segment."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, _request, movie_id, resolution, segment):
+        """Return the .ts segment file."""
+        path = get_segment_path(movie_id, resolution, segment)
+        if not path.is_file():
+            raise Http404
+        return FileResponse(path.open('rb'), content_type='video/MP2T')
