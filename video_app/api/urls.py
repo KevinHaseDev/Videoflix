@@ -1,3 +1,8 @@
+"""URL configuration for the video app API."""
 from django.urls import path
 
-urlpatterns = []
+from video_app.api.views import VideoListView
+
+urlpatterns = [
+    path('video/', VideoListView.as_view(), name='video-list'),
+]
