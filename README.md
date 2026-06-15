@@ -39,33 +39,41 @@ backend/
 └── requirements.txt
 ```
 
-## Getting Started (Docker — recommended)
+## Getting Started
 
-Docker is the intended way to run this project. The compose stack provides the
-web service, PostgreSQL, and Redis.
+This project runs entirely with Docker. The compose stack provides the web
+service, PostgreSQL, and Redis — you don't need Python, FFmpeg, or a database
+installed on your machine.
 
-### 1. Prerequisites
+### Prerequisites
 
 - [Docker](https://docs.docker.com/get-docker/) and Docker Compose
 
-### 2. Create the `.env` file
+### 1. Create the `.env` file
 
-Copy the template and fill in your values:
+Copy the template — then open `.env` and fill in your values (see
+[Environment Variables](#environment-variables); at minimum set `DB_NAME`,
+`DB_USER`, `DB_PASSWORD`, and a `SECRET_KEY`).
+
+Linux / macOS:
 
 ```bash
 cp .env.template .env
 ```
 
-See [Environment Variables](#environment-variables) below for what each entry
-means. At minimum set `DB_NAME`, `DB_USER`, `DB_PASSWORD`, and a `SECRET_KEY`.
+Windows (PowerShell):
 
-### 3. Build and start
+```powershell
+Copy-Item .env.template .env
+```
+
+### 2. Build and start the stack
 
 ```bash
 docker compose up --build
 ```
 
-The entrypoint script (`backend.entrypoint.sh`) automatically:
+On startup the entrypoint script (`backend.entrypoint.sh`) automatically:
 
 1. Waits for PostgreSQL to become reachable.
 2. Runs `collectstatic`, `makemigrations`, and `migrate`.
@@ -74,55 +82,22 @@ The entrypoint script (`backend.entrypoint.sh`) automatically:
 4. Starts an RQ worker (`rqworker default`) in the background.
 5. Starts Gunicorn on port **8000**.
 
-The API is then available at **http://localhost:8000/**, and the Django admin at
-**http://localhost:8000/admin/**.
+Once it's up, the API is available at **http://localhost:8000/** and the Django
+admin at **http://localhost:8000/admin/**.
 
-### 4. Stop
+### 3. Stop the stack
+
+Stop the containers but keep your data:
 
 ```bash
-docker compose down          # keep data
-docker compose down -v       # also remove volumes (db, redis, media, static)
+docker compose down
 ```
 
-## Getting Started (Local, without Docker)
+Stop and also remove all volumes (database, redis, media, static):
 
-You can run the project directly if you provide your own PostgreSQL and Redis
-instances, and have **FFmpeg** installed and on your `PATH`.
-
-# 1. Create and activate a virtual environment
 ```bash
-python -m venv .venv
-source 
- .venv/bin/activate        
-Windows: 
- .venv\Scripts\activate
+docker compose down -v
 ```
-# 2. Install dependencies
-```bash
-pip install -r requirements.txt
-```
-# 3. Configure
-```bash
- .env — point DB_HOST and REDIS_HOST at localhost
-    (the defaults "db" / "redis" are Docker service names)
-```
-# 4. Apply migrations
-```bash
-python manage.py migrate
-```
-
-# 5. In one terminal: start the RQ worker (required for uploads to process)
-```bash
-python manage.py rqworker default
-```
-# 6. In another terminal: run the dev server
-```bash
-python manage.py runserver
-```
-
-> **Note:** FFmpeg must be installed locally (e.g. `apt install ffmpeg`,
-> `brew install ffmpeg`, or `choco install ffmpeg`). Without the worker running,
-> uploaded videos will not be transcoded.
 
 ## Environment Variables
 
@@ -172,9 +147,8 @@ All variables are read from `.env`. A template is provided in `.env.template`.
 | `EMAIL_USE_SSL`       | Use SSL (`True`/`False`)          |
 | `DEFAULT_FROM_EMAIL`  | Default sender address            |
 
-> When `DB_HOST`/`REDIS_HOST` are set to the Docker service names (`db`, `redis`),
-> the app only resolves them correctly **inside** the compose network. For local
-> runs, set them to `localhost`.
+> `DB_HOST` and `REDIS_HOST` use the Docker service names (`db`, `redis`), which
+> resolve inside the compose network. Keep these defaults when running with Docker.
 
 ## API Endpoints
 
@@ -230,8 +204,8 @@ Transcoding is too slow to run inside a request, so it is offloaded to a worker.
   (see [video_app/api/signals.py](video_app/api/signals.py)).
 - The queue is backed by Redis and configured under `RQ_QUEUES` in
   [core/settings.py](core/settings.py) (default job timeout: 900s).
-- In Docker, the worker is started automatically by the entrypoint
-  (`python manage.py rqworker default`). Locally you must start it yourself.
+- The worker is started automatically by the entrypoint
+  (`python manage.py rqworker default`), so uploads are processed out of the box.
 - A `post_delete` signal removes the source file and the generated HLS directory
   when a video is deleted.
 
@@ -247,10 +221,8 @@ for logout. Access tokens live 30 minutes; refresh tokens 1 day.
 
 ## Running Tests
 
-```bash
-# Docker
-docker compose exec web python manage.py test
+Run the test suite inside the running `web` container:
 
-# Local
-python manage.py test
+```bash
+docker compose exec web python manage.py test
 ```

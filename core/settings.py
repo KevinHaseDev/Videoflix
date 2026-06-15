@@ -39,6 +39,16 @@ CSRF_TRUSTED_ORIGINS = os.environ.get(
     "CSRF_TRUSTED_ORIGINS", default="http://localhost:4200"
 ).split(",")
 
+# Cross-Origin Resource Sharing (django-cors-headers)
+# Frontend served from a different origin (e.g. Live Server :5500 or Angular :4200)
+# needs these origins explicitly allowed. Credentials are required because auth
+# uses HttpOnly JWT cookies, so a wildcard origin is not permitted by the browser.
+CORS_ALLOWED_ORIGINS = os.environ.get(
+    "CORS_ALLOWED_ORIGINS",
+    default="http://localhost:4200,http://127.0.0.1:5500,http://localhost:5500",
+).split(",")
+CORS_ALLOW_CREDENTIALS = True
+
 # Application definition
 
 INSTALLED_APPS = [
@@ -52,6 +62,7 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt',
     'rest_framework_simplejwt.token_blacklist',
     'django_rq',
+    'corsheaders',
     'auth_app',
     'video_app.apps.VideoAppConfig',
 ]
@@ -80,6 +91,7 @@ AUTH_COOKIE_SETTINGS = {
 }
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
