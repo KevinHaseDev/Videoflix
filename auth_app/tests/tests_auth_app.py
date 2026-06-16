@@ -1,10 +1,15 @@
 """Tests for the auth app: serializers, utils, views, and authentication."""
 
 from django.contrib.auth.models import User
+from django.contrib.auth.tokens import default_token_generator
 from django.core import mail
 from django.test import TestCase
+from django.urls import reverse
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
+from rest_framework import status
+from rest_framework.test import APITestCase
+from rest_framework_simplejwt.tokens import RefreshToken
 
 from auth_app.api.serializer import (
     LoginSerializer,
@@ -221,3 +226,231 @@ class PasswordConfirmSerializerTests(TestCase):
         data = {"new_password": "12345", "confirm_password": "12345"}
         serializer = PasswordConfirmSerializer(data=data)
         self.assertFalse(serializer.is_valid())
+
+
+class RegisterViewTests(APITestCase):
+    """Tests for POST /api/register/."""
+
+    def setUp(self):
+        """Resolve the register endpoint URL."""
+        self.url = reverse("register")
+
+    def test_register_creates_user_and_sends_email(self):
+        """A valid payload returns 201, creates the user, and sends an email."""
+        mail.outbox = []
+        data = {
+            "email": "fresh@example.com",
+            "password": VALID_PASSWORD,
+            "confirmed_password": VALID_PASSWORD,
+        }
+        response = self.client.post(self.url, data)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["user"]["email"], "fresh@example.com")
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertFalse(User.objects.get(email="fresh@example.com").is_active)
+
+    def test_register_duplicate_email_returns_400(self):
+        """Registering an existing email returns 400."""
+        User.objects.create_user(
+            username="dup@example.com", email="dup@example.com"
+        )
+        data = {
+            "email": "dup@example.com",
+            "password": VALID_PASSWORD,
+            "confirmed_password": VALID_PASSWORD,
+        }
+        response = self.client.post(self.url, data)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+class ActivateViewTests(APITestCase):
+    """Tests for GET /api/activate/<uidb64>/<token>/."""
+
+    def setUp(self):
+        """Create an inactive user and encode its uidb64."""
+        self.user = User.objects.create_user(
+            username="act@example.com", email="act@example.com", is_active=False
+        )
+        self.uidb64 = urlsafe_base64_encode(force_bytes(self.user.pk))
+
+    def _url(self, uidb64, token):
+        """Build the activation URL for the given uidb64 and token."""
+        return reverse("activate", kwargs={"uidb64": uidb64, "token": token})
+
+    def test_activate_success(self):
+        """A valid token activates the user and returns 200."""
+        token = account_activation_token.make_token(self.user)
+        response = self.client.get(self._url(self.uidb64, token))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.is_active)
+
+    def test_activate_invalid_token_returns_400(self):
+        """An invalid token leaves the user inactive and returns 400."""
+        response = self.client.get(self._url(self.uidb64, "bad-token"))
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.user.refresh_from_db()
+        self.assertFalse(self.user.is_active)
+
+    def test_activate_invalid_uid_returns_400(self):
+        """An unknown uidb64 returns 400."""
+        bad_uid = urlsafe_base64_encode(force_bytes(999999))
+        token = account_activation_token.make_token(self.user)
+        response = self.client.get(self._url(bad_uid, token))
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+class LoginViewTests(APITestCase):
+    """Tests for POST /api/login/."""
+
+    def setUp(self):
+        """Create an active user and resolve the login URL."""
+        self.url = reverse("login")
+        self.user = User.objects.create_user(
+            username="login@example.com",
+            email="login@example.com",
+            password=VALID_PASSWORD,
+            is_active=True,
+        )
+
+    def test_login_sets_auth_cookies(self):
+        """Valid credentials return 200 and set both auth cookies."""
+        data = {"email": "login@example.com", "password": VALID_PASSWORD}
+        response = self.client.post(self.url, data)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("access_token", response.cookies)
+        self.assertIn("refresh_token", response.cookies)
+
+    def test_login_invalid_credentials_returns_400(self):
+        """Wrong credentials return 400."""
+        data = {"email": "login@example.com", "password": "Wrong!2024"}
+        response = self.client.post(self.url, data)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+class LogoutViewTests(APITestCase):
+    """Tests for POST /api/logout/."""
+
+    def setUp(self):
+        """Create an active user and resolve the logout URL."""
+        self.url = reverse("logout")
+        self.user = User.objects.create_user(
+            username="logout@example.com", is_active=True
+        )
+
+    def test_logout_with_valid_token_returns_200(self):
+        """A valid refresh cookie blacklists the token and returns 200."""
+        refresh = RefreshToken.for_user(self.user)
+        self.client.cookies["refresh_token"] = str(refresh)
+        response = self.client.post(self.url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_logout_missing_token_returns_400(self):
+        """A missing refresh cookie returns 400."""
+        response = self.client.post(self.url)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_logout_invalid_token_returns_400(self):
+        """An invalid refresh cookie returns 400."""
+        self.client.cookies["refresh_token"] = "not-a-real-token"
+        response = self.client.post(self.url)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+class TokenRefreshViewTests(APITestCase):
+    """Tests for POST /api/token/refresh/."""
+
+    def setUp(self):
+        """Create an active user and resolve the refresh URL."""
+        self.url = reverse("token_refresh")
+        self.user = User.objects.create_user(
+            username="refresh@example.com", is_active=True
+        )
+
+    def test_refresh_sets_new_access_cookie(self):
+        """A valid refresh cookie returns 200 and sets a new access cookie."""
+        refresh = RefreshToken.for_user(self.user)
+        self.client.cookies["refresh_token"] = str(refresh)
+        response = self.client.post(self.url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("access_token", response.cookies)
+
+    def test_refresh_missing_token_returns_400(self):
+        """A missing refresh cookie returns 400."""
+        response = self.client.post(self.url)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_refresh_invalid_token_returns_401(self):
+        """An invalid refresh cookie returns 401."""
+        self.client.cookies["refresh_token"] = "not-a-real-token"
+        response = self.client.post(self.url)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+class PasswordResetViewTests(APITestCase):
+    """Tests for POST /api/password_reset/."""
+
+    def setUp(self):
+        """Resolve the reset URL and clear the mail outbox."""
+        self.url = reverse("password_reset")
+        mail.outbox = []
+
+    def test_reset_sends_email_for_existing_user(self):
+        """A known email triggers a reset email and returns 200."""
+        User.objects.create_user(
+            username="reset@example.com", email="reset@example.com"
+        )
+        response = self.client.post(self.url, {"email": "reset@example.com"})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(mail.outbox), 1)
+
+    def test_reset_unknown_email_still_returns_200(self):
+        """An unknown email returns 200 but sends no email."""
+        response = self.client.post(self.url, {"email": "ghost@example.com"})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(mail.outbox), 0)
+
+
+class PasswordConfirmViewTests(APITestCase):
+    """Tests for POST /api/password_confirm/<uidb64>/<token>/."""
+
+    def setUp(self):
+        """Create an active user and encode its uidb64."""
+        self.user = User.objects.create_user(
+            username="confirm@example.com",
+            password=VALID_PASSWORD,
+            is_active=True,
+        )
+        self.uidb64 = urlsafe_base64_encode(force_bytes(self.user.pk))
+
+    def _url(self, uidb64, token):
+        """Build the password confirm URL."""
+        return reverse(
+            "password_confirm", kwargs={"uidb64": uidb64, "token": token}
+        )
+
+    def _payload(self, password="NewPass!2024word"):
+        """Return a matching new-password payload."""
+        return {"new_password": password, "confirm_password": password}
+
+    def test_confirm_success_changes_password(self):
+        """A valid token sets the new password and returns 200."""
+        token = default_token_generator.make_token(self.user)
+        response = self.client.post(self._url(self.uidb64, token), self._payload())
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password("NewPass!2024word"))
+
+    def test_confirm_invalid_token_returns_400(self):
+        """An invalid token returns 400."""
+        response = self.client.post(
+            self._url(self.uidb64, "bad-token"), self._payload()
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_confirm_invalid_uid_returns_400(self):
+        """An unknown uidb64 returns 400."""
+        bad_uid = urlsafe_base64_encode(force_bytes(999999))
+        token = default_token_generator.make_token(self.user)
+        response = self.client.post(self._url(bad_uid, token), self._payload())
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
