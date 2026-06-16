@@ -3,6 +3,7 @@
 import shutil
 import tempfile
 from pathlib import Path
+from unittest.mock import patch
 
 from django.conf import settings
 from django.contrib.auth.models import User
@@ -12,6 +13,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from video_app.api.serializer import VideoSerializer
+from video_app.api.service import convert_video_to_hls, extract_thumbnail
 from video_app.api.utils import get_m3u8_path, get_segment_path
 from video_app.models import Video
 
@@ -148,3 +150,81 @@ class VideoStreamViewTests(APITestCase):
         )
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+
+class VideoServiceTests(TestCase):
+    """Tests for the ffmpeg-based service functions (subprocess mocked)."""
+
+    def setUp(self):
+        """Isolate MEDIA_ROOT and create a video with a source file."""
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        override = override_settings(MEDIA_ROOT=Path(tmp))
+        override.enable()
+        self.addCleanup(override.disable)
+        self.video = Video.objects.create(title="x", description="d")
+        self.video.video_file = "videos/test.mp4"
+        self.video.save()
+
+    @patch("video_app.api.service.subprocess.run")
+    def test_extract_thumbnail_saves_thumbnail(self, mock_run):
+        """ffmpeg is invoked and the extracted frame is stored as thumbnail."""
+        extract_thumbnail(self.video.pk)
+        mock_run.assert_called_once()
+        self.video.refresh_from_db()
+        self.assertTrue(self.video.thumbnail)
+
+    @patch("video_app.api.service.subprocess.run")
+    def test_convert_video_to_hls_runs_per_resolution(self, mock_run):
+        """Each resolution gets an output directory and an ffmpeg call."""
+        convert_video_to_hls(self.video.pk)
+        self.assertEqual(mock_run.call_count, 3)
+        base = Path(settings.MEDIA_ROOT) / "videos" / str(self.video.pk)
+        self.assertTrue((base / "480p").is_dir())
+
+
+class VideoSignalTests(TestCase):
+    """Tests for the post_save and post_delete signal handlers."""
+
+    def setUp(self):
+        """Isolate MEDIA_ROOT for file cleanup assertions."""
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        override = override_settings(MEDIA_ROOT=Path(tmp))
+        override.enable()
+        self.addCleanup(override.disable)
+
+    @patch("video_app.api.signals.django_rq.get_queue")
+    def test_post_save_enqueues_jobs_for_new_video_with_file(self, mock_queue):
+        """A new video with a file enqueues thumbnail and HLS jobs."""
+        Video.objects.create(
+            title="x", description="d", video_file="videos/v.mp4"
+        )
+        self.assertEqual(mock_queue.return_value.enqueue.call_count, 2)
+
+    @patch("video_app.api.signals.django_rq.get_queue")
+    def test_post_save_skips_jobs_without_file(self, mock_queue):
+        """A new video without a file enqueues nothing."""
+        Video.objects.create(title="x", description="d")
+        mock_queue.assert_not_called()
+
+    @patch("video_app.api.signals.django_rq.get_queue")
+    def test_delete_removes_file_and_hls_dir(self, _mock_queue):
+        """Deleting a video removes its source file and HLS output dir."""
+        video = Video.objects.create(
+            title="x", description="d", video_file="videos/v.mp4"
+        )
+        file_path = Path(settings.MEDIA_ROOT) / "videos" / "v.mp4"
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        file_path.write_bytes(b"data")
+        hls_dir = Path(settings.MEDIA_ROOT) / "videos" / str(video.pk)
+        hls_dir.mkdir(parents=True, exist_ok=True)
+        video.delete()
+        self.assertFalse(file_path.exists())
+        self.assertFalse(hls_dir.exists())
+
+    @patch("video_app.api.signals.django_rq.get_queue")
+    def test_delete_without_file_is_safe(self, _mock_queue):
+        """Deleting a video without a file does not raise."""
+        video = Video.objects.create(title="x", description="d")
+        video.delete()
