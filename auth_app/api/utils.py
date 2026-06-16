@@ -8,6 +8,7 @@ from django.contrib.auth.tokens import (
 )
 from django.core.exceptions import ObjectDoesNotExist
 from django.core.mail import send_mail
+from django.template.loader import render_to_string
 from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 
@@ -39,6 +40,10 @@ def send_activation_email(user: User, token: str) -> None:
         f"{settings.FRONTEND_URL}"
         f"/pages/auth/activate.html?uid={uidb64}&token={token}"
     )
+    context = {"activation_link": activation_link}
+    html_message = render_to_string(
+        "auth_app/emails/account_activation.html", context
+    )
     send_mail(
         subject="Activate your Videoflix account",
         message=(
@@ -48,6 +53,7 @@ def send_activation_email(user: User, token: str) -> None:
         ),
         from_email=settings.DEFAULT_FROM_EMAIL,
         recipient_list=[user.email],
+        html_message=html_message,
         fail_silently=False,
     )
 
@@ -60,6 +66,10 @@ def send_password_reset_email(user: User) -> None:
         f"{settings.FRONTEND_URL}"
         f"/pages/auth/confirm_password.html?uid={uidb64}&token={token}"
     )
+    context = {"reset_link": reset_link}
+    html_message = render_to_string(
+        "auth_app/emails/password_reset.html", context
+    )
     send_mail(
         subject="Reset your Videoflix password",
         message=(
@@ -70,5 +80,6 @@ def send_password_reset_email(user: User) -> None:
         ),
         from_email=settings.DEFAULT_FROM_EMAIL,
         recipient_list=[user.email],
+        html_message=html_message,
         fail_silently=False,
     )
