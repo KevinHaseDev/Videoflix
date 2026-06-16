@@ -3,14 +3,19 @@
 from django.contrib.auth.models import User
 from django.contrib.auth.tokens import default_token_generator
 from django.core import mail
-from django.test import TestCase
+from django.http import HttpResponse
+from django.test import RequestFactory, TestCase
 from django.urls import reverse
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 from rest_framework import status
 from rest_framework.test import APITestCase
-from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.tokens import AccessToken, RefreshToken
 
+from auth_app.api.authentication import (
+    AutoRefreshAccessTokenMiddleware,
+    CookieJWTAuthentication,
+)
 from auth_app.api.serializer import (
     LoginSerializer,
     PasswordConfirmSerializer,
@@ -454,3 +459,78 @@ class PasswordConfirmViewTests(APITestCase):
         token = default_token_generator.make_token(self.user)
         response = self.client.post(self._url(bad_uid, token), self._payload())
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+class CookieJWTAuthenticationTests(TestCase):
+    """Tests for cookie-based JWT authentication."""
+
+    def setUp(self):
+        """Create a user, request factory, and the authenticator."""
+        self.factory = RequestFactory()
+        self.user = User.objects.create_user(
+            username="jwt@example.com", is_active=True
+        )
+        self.auth = CookieJWTAuthentication()
+
+    def test_no_cookie_returns_none(self):
+        """Without an access_token cookie, authentication is skipped."""
+        request = self.factory.get("/")
+        self.assertIsNone(self.auth.authenticate(request))
+
+    def test_valid_cookie_returns_user(self):
+        """A valid access_token cookie authenticates the user."""
+        request = self.factory.get("/")
+        request.COOKIES["access_token"] = str(AccessToken.for_user(self.user))
+        user, _validated = self.auth.authenticate(request)
+        self.assertEqual(user, self.user)
+
+
+class AutoRefreshMiddlewareTests(TestCase):
+    """Tests for the access-token auto-refresh middleware."""
+
+    def setUp(self):
+        """Create a user and a request factory."""
+        self.factory = RequestFactory()
+        self.user = User.objects.create_user(
+            username="mw@example.com", is_active=True
+        )
+
+    def _run(self, cookies):
+        """Run the middleware with the given request cookies."""
+        response = HttpResponse()
+        middleware = AutoRefreshAccessTokenMiddleware(lambda _req: response)
+        request = self.factory.get("/")
+        request.COOKIES.update(cookies)
+        return middleware(request), request
+
+    def test_no_refresh_cookie_does_nothing(self):
+        """Without a refresh cookie, no access token is issued."""
+        response, _ = self._run({})
+        self.assertNotIn("access_token", response.cookies)
+
+    def test_valid_access_cookie_is_not_renewed(self):
+        """A still-valid access token is left untouched."""
+        access = str(AccessToken.for_user(self.user))
+        refresh = str(RefreshToken.for_user(self.user))
+        cookies = {"access_token": access, "refresh_token": refresh}
+        response, _ = self._run(cookies)
+        self.assertNotIn("access_token", response.cookies)
+
+    def test_invalid_access_with_valid_refresh_is_renewed(self):
+        """An invalid access token is renewed from a valid refresh token."""
+        refresh = str(RefreshToken.for_user(self.user))
+        cookies = {"access_token": "invalid", "refresh_token": refresh}
+        response, request = self._run(cookies)
+        self.assertIn("access_token", response.cookies)
+        self.assertIn("access_token", request.COOKIES)
+
+    def test_missing_access_with_valid_refresh_is_renewed(self):
+        """A missing access token is issued from a valid refresh token."""
+        refresh = str(RefreshToken.for_user(self.user))
+        response, _ = self._run({"refresh_token": refresh})
+        self.assertIn("access_token", response.cookies)
+
+    def test_dead_refresh_cookie_does_nothing(self):
+        """An invalid refresh token yields no new access token."""
+        response, _ = self._run({"refresh_token": "not-a-token"})
+        self.assertNotIn("access_token", response.cookies)
