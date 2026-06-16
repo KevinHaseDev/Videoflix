@@ -1,7 +1,10 @@
 """Tests for the auth app: serializers, utils, views, and authentication."""
 
 from django.contrib.auth.models import User
+from django.core import mail
 from django.test import TestCase
+from django.utils.encoding import force_bytes
+from django.utils.http import urlsafe_base64_encode
 
 from auth_app.api.serializer import (
     LoginSerializer,
@@ -9,7 +12,12 @@ from auth_app.api.serializer import (
     PasswordResetSerializer,
     RegisterSerializer,
 )
-from auth_app.api.utils import get_user_from_uidb64
+from auth_app.api.utils import (
+    account_activation_token,
+    get_user_from_uidb64,
+    send_activation_email,
+    send_password_reset_email,
+)
 
 VALID_PASSWORD = "Sup3rSecret!2024"
 
@@ -17,9 +25,72 @@ VALID_PASSWORD = "Sup3rSecret!2024"
 class Uidb64LookupTests(TestCase):
     """Tests for the get_user_from_uidb64 helper."""
 
+    def test_valid_uidb64_returns_user(self):
+        """A valid uidb64 returns the matching user."""
+        user = User.objects.create_user(username="u@example.com")
+        uidb64 = urlsafe_base64_encode(force_bytes(user.pk))
+        self.assertEqual(get_user_from_uidb64(uidb64), user)
+
+    def test_unknown_pk_returns_none(self):
+        """A valid uidb64 for a missing user yields None."""
+        uidb64 = urlsafe_base64_encode(force_bytes(999999))
+        self.assertIsNone(get_user_from_uidb64(uidb64))
+
     def test_invalid_uidb64_returns_none(self):
         """A malformed uidb64 yields None instead of raising."""
         self.assertIsNone(get_user_from_uidb64("@@@invalid@@@"))
+
+
+class AccountActivationTokenTests(TestCase):
+    """Tests for the activation token generator."""
+
+    def setUp(self):
+        """Create an inactive user to issue tokens for."""
+        self.user = User.objects.create_user(
+            username="token@example.com", is_active=False
+        )
+
+    def test_token_is_valid_for_unchanged_user(self):
+        """A freshly issued token validates for the same user."""
+        token = account_activation_token.make_token(self.user)
+        self.assertTrue(account_activation_token.check_token(self.user, token))
+
+    def test_token_invalid_after_activation(self):
+        """Activating the user invalidates a previously issued token."""
+        token = account_activation_token.make_token(self.user)
+        self.user.is_active = True
+        self.user.save()
+        self.assertFalse(account_activation_token.check_token(self.user, token))
+
+
+class AuthEmailTests(TestCase):
+    """Tests for the activation and password reset email helpers."""
+
+    def setUp(self):
+        """Create a user and reset the mail outbox."""
+        self.user = User.objects.create_user(
+            username="mail@example.com", email="mail@example.com"
+        )
+        mail.outbox = []
+
+    def test_send_activation_email(self):
+        """The activation email is sent to the user with an HTML alternative."""
+        token = account_activation_token.make_token(self.user)
+        send_activation_email(self.user, token)
+        self.assertEqual(len(mail.outbox), 1)
+        message = mail.outbox[0]
+        self.assertEqual(message.to, ["mail@example.com"])
+        self.assertIn("Activate", message.subject)
+        self.assertTrue(message.alternatives)
+
+    def test_send_password_reset_email(self):
+        """The password reset email is sent to the user with an HTML alternative."""
+        send_password_reset_email(self.user)
+        self.assertEqual(len(mail.outbox), 1)
+        message = mail.outbox[0]
+        self.assertEqual(message.to, ["mail@example.com"])
+        self.assertIn("Reset", message.subject)
+        self.assertTrue(message.alternatives)
 
 
 class RegisterSerializerTests(TestCase):
