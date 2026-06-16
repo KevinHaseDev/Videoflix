@@ -1,6 +1,7 @@
 asgiref==3.11.1
 click==8.4.1
 colorama==0.4.6
+coverage==7.14.1
 croniter==6.2.2
 Django==6.0.5
 django-cors-headers==4.9.0

@@ -1,0 +1,17 @@
+[run]
+source =
+    auth_app
+    video_app
+    core
+omit =
+    */migrations/*
+    */tests/*
+    */__init__.py
+    core/settings.py
+    core/wsgi.py
+    core/asgi.py
+    manage.py
+
+[report]
+show_missing = True
+skip_covered = False
