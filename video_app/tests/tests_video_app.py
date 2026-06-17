@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from django.conf import settings
-from django.contrib.auth.models import User
+from django.contrib.auth import get_user_model
 from django.test import RequestFactory, TestCase, override_settings
 from django.urls import reverse
 from rest_framework import status
@@ -16,6 +16,8 @@ from video_app.api.serializer import VideoSerializer
 from video_app.api.service import convert_video_to_hls, extract_thumbnail
 from video_app.api.utils import get_m3u8_path, get_segment_path
 from video_app.models import Video
+
+User = get_user_model()
 
 
 class VideoModelTests(TestCase):
@@ -52,9 +54,7 @@ class VideoSerializerTests(TestCase):
 
     def test_thumbnail_with_request_is_absolute(self):
         """With a request in context, the thumbnail URL is absolute."""
-        video = Video.objects.create(
-            title="Thumb", description="d", thumbnail="thumbnails/t.jpg"
-        )
+        video = Video.objects.create(title="Thumb", description="d", thumbnail="thumbnails/t.jpg")
         request = RequestFactory().get("/")
         data = VideoSerializer(video, context={"request": request}).data
         self.assertTrue(data["thumbnail_url"].startswith("http"))
@@ -62,9 +62,7 @@ class VideoSerializerTests(TestCase):
 
     def test_thumbnail_without_request_is_relative(self):
         """Without a request in context, the thumbnail URL is relative."""
-        video = Video.objects.create(
-            title="Thumb", description="d", thumbnail="thumbnails/t.jpg"
-        )
+        video = Video.objects.create(title="Thumb", description="d", thumbnail="thumbnails/t.jpg")
         data = VideoSerializer(video).data
         self.assertEqual(data["thumbnail_url"], video.thumbnail.url)
 
@@ -75,9 +73,7 @@ class VideoListViewTests(APITestCase):
     def setUp(self):
         """Create a viewer and resolve the list URL."""
         self.url = reverse("video-list")
-        self.user = User.objects.create_user(
-            username="viewer@example.com", is_active=True
-        )
+        self.user = User.objects.create_user(username="viewer@example.com", is_active=True)
 
     def test_list_requires_authentication(self):
         """An anonymous request is rejected with 401."""
@@ -98,9 +94,7 @@ class VideoStreamViewTests(APITestCase):
 
     def setUp(self):
         """Authenticate a user and point MEDIA_ROOT at a temp directory."""
-        self.user = User.objects.create_user(
-            username="stream@example.com", is_active=True
-        )
+        self.user = User.objects.create_user(username="stream@example.com", is_active=True)
         self.client.force_authenticate(user=self.user)
         self.tmp = tempfile.mkdtemp()
         self.override = override_settings(MEDIA_ROOT=Path(self.tmp))
@@ -197,9 +191,7 @@ class VideoSignalTests(TestCase):
     @patch("video_app.api.signals.django_rq.get_queue")
     def test_post_save_enqueues_jobs_for_new_video_with_file(self, mock_queue):
         """A new video with a file enqueues thumbnail and HLS jobs."""
-        Video.objects.create(
-            title="x", description="d", video_file="videos/v.mp4"
-        )
+        Video.objects.create(title="x", description="d", video_file="videos/v.mp4")
         self.assertEqual(mock_queue.return_value.enqueue.call_count, 2)
 
     @patch("video_app.api.signals.django_rq.get_queue")
@@ -211,9 +203,7 @@ class VideoSignalTests(TestCase):
     @patch("video_app.api.signals.django_rq.get_queue")
     def test_delete_removes_file_and_hls_dir(self, _mock_queue):
         """Deleting a video removes its source file and HLS output dir."""
-        video = Video.objects.create(
-            title="x", description="d", video_file="videos/v.mp4"
-        )
+        video = Video.objects.create(title="x", description="d", video_file="videos/v.mp4")
         file_path = Path(settings.MEDIA_ROOT) / "videos" / "v.mp4"
         file_path.parent.mkdir(parents=True, exist_ok=True)
         file_path.write_bytes(b"data")

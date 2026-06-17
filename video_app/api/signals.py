@@ -1,4 +1,5 @@
-"""signals for the video app."""
+"""Signals for the video app."""
+
 import shutil
 from pathlib import Path
 
@@ -19,7 +20,7 @@ def video_post_save(sender, instance, created, **kwargs):
     file is actually present; otherwise ffmpeg would fail on an empty path.
     """
     if created and instance.video_file:
-        queue = django_rq.get_queue('default')
+        queue = django_rq.get_queue("default")
         queue.enqueue(extract_thumbnail, instance.pk)
         queue.enqueue(convert_video_to_hls, instance.pk)
 

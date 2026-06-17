@@ -1,6 +1,6 @@
 """Tests for the auth app: serializers, utils, views, and authentication."""
 
-from django.contrib.auth.models import User
+from django.contrib.auth import get_user_model
 from django.contrib.auth.tokens import default_token_generator
 from django.core import mail
 from django.http import HttpResponse
@@ -29,6 +29,7 @@ from auth_app.api.utils import (
     send_password_reset_email,
 )
 
+User = get_user_model()
 VALID_PASSWORD = "Sup3rSecret!2024"
 
 
@@ -56,9 +57,7 @@ class AccountActivationTokenTests(TestCase):
 
     def setUp(self):
         """Create an inactive user to issue tokens for."""
-        self.user = User.objects.create_user(
-            username="token@example.com", is_active=False
-        )
+        self.user = User.objects.create_user(username="token@example.com", is_active=False)
 
     def test_token_is_valid_for_unchanged_user(self):
         """A freshly issued token validates for the same user."""
@@ -78,9 +77,7 @@ class AuthEmailTests(TestCase):
 
     def setUp(self):
         """Create a user and reset the mail outbox."""
-        self.user = User.objects.create_user(
-            username="mail@example.com", email="mail@example.com"
-        )
+        self.user = User.objects.create_user(username="mail@example.com", email="mail@example.com")
         mail.outbox = []
 
     def test_send_activation_email(self):
@@ -256,9 +253,7 @@ class RegisterViewTests(APITestCase):
 
     def test_register_duplicate_email_returns_400(self):
         """Registering an existing email returns 400."""
-        User.objects.create_user(
-            username="dup@example.com", email="dup@example.com"
-        )
+        User.objects.create_user(username="dup@example.com", email="dup@example.com")
         data = {
             "email": "dup@example.com",
             "password": VALID_PASSWORD,
@@ -339,9 +334,7 @@ class LogoutViewTests(APITestCase):
     def setUp(self):
         """Create an active user and resolve the logout URL."""
         self.url = reverse("logout")
-        self.user = User.objects.create_user(
-            username="logout@example.com", is_active=True
-        )
+        self.user = User.objects.create_user(username="logout@example.com", is_active=True)
 
     def test_logout_with_valid_token_returns_200(self):
         """A valid refresh cookie blacklists the token and returns 200."""
@@ -368,9 +361,7 @@ class TokenRefreshViewTests(APITestCase):
     def setUp(self):
         """Create an active user and resolve the refresh URL."""
         self.url = reverse("token_refresh")
-        self.user = User.objects.create_user(
-            username="refresh@example.com", is_active=True
-        )
+        self.user = User.objects.create_user(username="refresh@example.com", is_active=True)
 
     def test_refresh_sets_new_access_cookie(self):
         """A valid refresh cookie returns 200 and sets a new access cookie."""
@@ -402,9 +393,7 @@ class PasswordResetViewTests(APITestCase):
 
     def test_reset_sends_email_for_existing_user(self):
         """A known email triggers a reset email and returns 200."""
-        User.objects.create_user(
-            username="reset@example.com", email="reset@example.com"
-        )
+        User.objects.create_user(username="reset@example.com", email="reset@example.com")
         response = self.client.post(self.url, {"email": "reset@example.com"})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(mail.outbox), 1)
@@ -430,9 +419,7 @@ class PasswordConfirmViewTests(APITestCase):
 
     def _url(self, uidb64, token):
         """Build the password confirm URL."""
-        return reverse(
-            "password_confirm", kwargs={"uidb64": uidb64, "token": token}
-        )
+        return reverse("password_confirm", kwargs={"uidb64": uidb64, "token": token})
 
     def _payload(self, password="NewPass!2024word"):
         """Return a matching new-password payload."""
@@ -448,9 +435,7 @@ class PasswordConfirmViewTests(APITestCase):
 
     def test_confirm_invalid_token_returns_400(self):
         """An invalid token returns 400."""
-        response = self.client.post(
-            self._url(self.uidb64, "bad-token"), self._payload()
-        )
+        response = self.client.post(self._url(self.uidb64, "bad-token"), self._payload())
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_confirm_invalid_uid_returns_400(self):
@@ -467,9 +452,7 @@ class CookieJWTAuthenticationTests(TestCase):
     def setUp(self):
         """Create a user, request factory, and the authenticator."""
         self.factory = RequestFactory()
-        self.user = User.objects.create_user(
-            username="jwt@example.com", is_active=True
-        )
+        self.user = User.objects.create_user(username="jwt@example.com", is_active=True)
         self.auth = CookieJWTAuthentication()
 
     def test_no_cookie_returns_none(self):
@@ -491,9 +474,7 @@ class AutoRefreshMiddlewareTests(TestCase):
     def setUp(self):
         """Create a user and a request factory."""
         self.factory = RequestFactory()
-        self.user = User.objects.create_user(
-            username="mw@example.com", is_active=True
-        )
+        self.user = User.objects.create_user(username="mw@example.com", is_active=True)
 
     def _run(self, cookies):
         """Run the middleware with the given request cookies."""

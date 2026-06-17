@@ -1,8 +1,13 @@
+"""App configuration for the video app."""
+
 from django.apps import AppConfig
 
 
 class VideoAppConfig(AppConfig):
-    name = 'video_app'
+    """Default configuration that wires up the video app's signal handlers."""
+
+    name = "video_app"
 
     def ready(self):
-        import video_app.api.signals
+        """Import signal handlers so they are registered on app startup."""
+        import video_app.api.signals  # pylint: disable=import-outside-toplevel,unused-import

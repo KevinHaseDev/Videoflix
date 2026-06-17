@@ -75,18 +75,16 @@ class LoginView(APIView):
         """Validate credentials and issue JWT tokens as HttpOnly cookies."""
         serializer = LoginSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        user = serializer.validated_data['user']
+        user = serializer.validated_data["user"]
         refresh = RefreshToken.for_user(user)
         response = Response(
             {"detail": "Login successful", "user": {"id": user.id, "username": user.username}},
             status=status.HTTP_200_OK,
         )
         response.set_cookie(
-            'access_token', str(refresh.access_token), **settings.AUTH_COOKIE_SETTINGS
+            "access_token", str(refresh.access_token), **settings.AUTH_COOKIE_SETTINGS
         )
-        response.set_cookie(
-            'refresh_token', str(refresh), **settings.AUTH_COOKIE_SETTINGS
-        )
+        response.set_cookie("refresh_token", str(refresh), **settings.AUTH_COOKIE_SETTINGS)
         return response
 
 
@@ -97,7 +95,7 @@ class LogoutView(APIView):
 
     def post(self, request: Request) -> Response:
         """Blacklist the refresh token cookie and delete both auth cookies."""
-        refresh_token = request.COOKIES.get('refresh_token')
+        refresh_token = request.COOKIES.get("refresh_token")
         if refresh_token is None:
             return Response(
                 {"detail": "Refresh token is missing."},
@@ -119,8 +117,8 @@ class LogoutView(APIView):
             },
             status=status.HTTP_200_OK,
         )
-        response.delete_cookie('access_token')
-        response.delete_cookie('refresh_token')
+        response.delete_cookie("access_token")
+        response.delete_cookie("refresh_token")
         return response
 
 
@@ -131,13 +129,13 @@ class CookieTokenRefreshView(APIView):
 
     def post(self, request: Request) -> Response:
         """Read the refresh cookie, validate it, and set a new access_token cookie."""
-        refresh_token = request.COOKIES.get('refresh_token')
+        refresh_token = request.COOKIES.get("refresh_token")
         if refresh_token is None:
             return Response(
                 {"detail": "Refresh token is missing."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        serializer = TokenRefreshSerializer(data={'refresh': refresh_token})
+        serializer = TokenRefreshSerializer(data={"refresh": refresh_token})
         try:
             serializer.is_valid(raise_exception=True)
         except (TokenError, InvalidToken, ValidationError):
@@ -145,14 +143,12 @@ class CookieTokenRefreshView(APIView):
                 {"detail": "Invalid refresh token."},
                 status=status.HTTP_401_UNAUTHORIZED,
             )
-        access_token = serializer.validated_data['access']
+        access_token = serializer.validated_data["access"]
         response = Response(
             {"detail": "Token refreshed", "access": access_token},
             status=status.HTTP_200_OK,
         )
-        response.set_cookie(
-            'access_token', access_token, **settings.AUTH_COOKIE_SETTINGS
-        )
+        response.set_cookie("access_token", access_token, **settings.AUTH_COOKIE_SETTINGS)
         return response
 
 
@@ -165,7 +161,7 @@ class PasswordResetView(APIView):
         """Dispatch a reset email when a matching user exists; always respond 200."""
         serializer = PasswordResetSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        user = User.objects.filter(email=serializer.validated_data['email']).first()
+        user = User.objects.filter(email=serializer.validated_data["email"]).first()
         if user is not None:
             send_password_reset_email(user)
         return Response(
@@ -189,7 +185,7 @@ class PasswordConfirmView(APIView):
                 {"detail": "Invalid or expired token."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        user.set_password(serializer.validated_data['new_password'])
+        user.set_password(serializer.validated_data["new_password"])
         user.save()
         return Response(
             {"detail": "Your Password has been successfully reset."},

@@ -1,4 +1,5 @@
 """Permission classes for video endpoints."""
+
 from rest_framework.permissions import IsAuthenticated
 
 

@@ -10,7 +10,8 @@ class CookieJWTAuthentication(JWTAuthentication):
     """JWT authentication using the HttpOnly 'access_token' cookie."""
 
     def authenticate(self, request):
-        raw_token = request.COOKIES.get('access_token')
+        """Authenticate via the access_token cookie, or return None if absent."""
+        raw_token = request.COOKIES.get("access_token")
         if raw_token is None:
             return None
         validated_token = self.get_validated_token(raw_token)
@@ -35,16 +36,16 @@ class AutoRefreshAccessTokenMiddleware:
         new_access = self._renew_if_needed(request)
         response = self.get_response(request)
         if new_access is not None:
-            response.set_cookie('access_token', new_access, **settings.AUTH_COOKIE_SETTINGS)
+            response.set_cookie("access_token", new_access, **settings.AUTH_COOKIE_SETTINGS)
         return response
 
     @staticmethod
     def _renew_if_needed(request):
         """Return a new access token string if a renewal happened, else None."""
-        refresh = request.COOKIES.get('refresh_token')
+        refresh = request.COOKIES.get("refresh_token")
         if not refresh:
             return None
-        access = request.COOKIES.get('access_token')
+        access = request.COOKIES.get("access_token")
         if access:
             try:
                 AccessToken(access)
@@ -56,5 +57,5 @@ class AutoRefreshAccessTokenMiddleware:
         except TokenError:
             return None  # refresh token dead, user must log in again
         # Make the new token visible to CookieJWTAuthentication in this request.
-        request.COOKIES['access_token'] = new_access
+        request.COOKIES["access_token"] = new_access
         return new_access

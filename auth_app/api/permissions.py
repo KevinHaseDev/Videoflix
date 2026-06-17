@@ -1,4 +1,5 @@
 """Permission classes for authentication endpoints."""
+
 from rest_framework.permissions import AllowAny
 
 
