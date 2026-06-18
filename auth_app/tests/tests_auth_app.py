@@ -1,5 +1,7 @@
 """Tests for the auth app: serializers, utils, views, and authentication."""
 
+from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
 from django.contrib.auth.tokens import default_token_generator
 from django.core import mail
@@ -26,7 +28,9 @@ from auth_app.api.utils import (
     account_activation_token,
     get_user_from_uidb64,
     send_activation_email,
+    send_activation_email_task,
     send_password_reset_email,
+    send_password_reset_email_task,
 )
 
 User = get_user_model()
@@ -72,32 +76,59 @@ class AccountActivationTokenTests(TestCase):
         self.assertFalse(account_activation_token.check_token(self.user, token))
 
 
-class AuthEmailTests(TestCase):
-    """Tests for the activation and password reset email helpers."""
+class AuthEmailTaskTests(TestCase):
+    """Tests for the email tasks that run inside the RQ worker."""
 
     def setUp(self):
         """Create a user and reset the mail outbox."""
         self.user = User.objects.create_user(username="mail@example.com", email="mail@example.com")
         mail.outbox = []
 
-    def test_send_activation_email(self):
-        """The activation email is sent to the user with an HTML alternative."""
+    def test_activation_email_task_sends_mail(self):
+        """The activation task sends the email to the user with an HTML alternative."""
         token = account_activation_token.make_token(self.user)
-        send_activation_email(self.user, token)
+        send_activation_email_task(self.user.pk, token)
         self.assertEqual(len(mail.outbox), 1)
         message = mail.outbox[0]
         self.assertEqual(message.to, ["mail@example.com"])
         self.assertIn("Activate", message.subject)
         self.assertTrue(message.alternatives)
 
-    def test_send_password_reset_email(self):
-        """The password reset email is sent to the user with an HTML alternative."""
-        send_password_reset_email(self.user)
+    def test_password_reset_email_task_sends_mail(self):
+        """The password reset task sends the email to the user with an HTML alternative."""
+        send_password_reset_email_task(self.user.pk)
         self.assertEqual(len(mail.outbox), 1)
         message = mail.outbox[0]
         self.assertEqual(message.to, ["mail@example.com"])
         self.assertIn("Reset", message.subject)
         self.assertTrue(message.alternatives)
+
+
+class AuthEmailDispatchTests(TestCase):
+    """Tests that the email helpers enqueue their tasks on the high-priority queue."""
+
+    def setUp(self):
+        """Create a user to dispatch emails for."""
+        self.user = User.objects.create_user(username="mail@example.com", email="mail@example.com")
+
+    @patch("auth_app.api.utils.django_rq.get_queue")
+    def test_send_activation_email_enqueues_on_high_queue(self, mock_get_queue):
+        """Dispatching the activation email enqueues the task on the high queue."""
+        token = account_activation_token.make_token(self.user)
+        send_activation_email(self.user, token)
+        mock_get_queue.assert_called_once_with("high")
+        mock_get_queue.return_value.enqueue.assert_called_once_with(
+            send_activation_email_task, self.user.pk, token
+        )
+
+    @patch("auth_app.api.utils.django_rq.get_queue")
+    def test_send_password_reset_email_enqueues_on_high_queue(self, mock_get_queue):
+        """Dispatching the password reset email enqueues the task on the high queue."""
+        send_password_reset_email(self.user)
+        mock_get_queue.assert_called_once_with("high")
+        mock_get_queue.return_value.enqueue.assert_called_once_with(
+            send_password_reset_email_task, self.user.pk
+        )
 
 
 class RegisterSerializerTests(TestCase):
@@ -237,9 +268,9 @@ class RegisterViewTests(APITestCase):
         """Resolve the register endpoint URL."""
         self.url = reverse("register")
 
-    def test_register_creates_user_and_sends_email(self):
-        """A valid payload returns 201, creates the user, and sends an email."""
-        mail.outbox = []
+    @patch("auth_app.api.utils.django_rq.get_queue")
+    def test_register_creates_user_and_sends_email(self, mock_get_queue):
+        """A valid payload returns 201, creates the user, and enqueues an activation email."""
         data = {
             "email": "fresh@example.com",
             "password": VALID_PASSWORD,
@@ -248,7 +279,7 @@ class RegisterViewTests(APITestCase):
         response = self.client.post(self.url, data)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data["user"]["email"], "fresh@example.com")
-        self.assertEqual(len(mail.outbox), 1)
+        mock_get_queue.return_value.enqueue.assert_called_once()
         self.assertFalse(User.objects.get(email="fresh@example.com").is_active)
 
     def test_register_duplicate_email_returns_400(self):
@@ -391,18 +422,20 @@ class PasswordResetViewTests(APITestCase):
         self.url = reverse("password_reset")
         mail.outbox = []
 
-    def test_reset_sends_email_for_existing_user(self):
-        """A known email triggers a reset email and returns 200."""
+    @patch("auth_app.api.utils.django_rq.get_queue")
+    def test_reset_sends_email_for_existing_user(self, mock_get_queue):
+        """A known email enqueues a reset email and returns 200."""
         User.objects.create_user(username="reset@example.com", email="reset@example.com")
         response = self.client.post(self.url, {"email": "reset@example.com"})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(mail.outbox), 1)
+        mock_get_queue.return_value.enqueue.assert_called_once()
 
-    def test_reset_unknown_email_still_returns_200(self):
-        """An unknown email returns 200 but sends no email."""
+    @patch("auth_app.api.utils.django_rq.get_queue")
+    def test_reset_unknown_email_still_returns_200(self, mock_get_queue):
+        """An unknown email returns 200 but enqueues no email."""
         response = self.client.post(self.url, {"email": "ghost@example.com"})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(mail.outbox), 0)
+        mock_get_queue.return_value.enqueue.assert_not_called()
 
 
 class PasswordConfirmViewTests(APITestCase):

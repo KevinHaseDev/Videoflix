@@ -1,5 +1,6 @@
 """Helper functions for token generation, user lookup, and auth emails."""
 
+import django_rq
 from django.conf import settings
 from django.contrib.auth.models import User
 from django.contrib.auth.tokens import (
@@ -33,8 +34,9 @@ def get_user_from_uidb64(uidb64: str) -> User | None:
         return None
 
 
-def send_activation_email(user: User, token: str) -> None:
-    """Send the account activation email with the frontend activation link."""
+def send_activation_email_task(user_pk: int, token: str) -> None:
+    """Render and send the account activation email. Runs in the RQ worker."""
+    user = User.objects.get(pk=user_pk)
     uidb64 = urlsafe_base64_encode(force_bytes(user.pk))
     activation_link = (
         f"{settings.FRONTEND_URL}" f"/pages/auth/activate.html?uid={uidb64}&token={token}"
@@ -55,8 +57,15 @@ def send_activation_email(user: User, token: str) -> None:
     )
 
 
-def send_password_reset_email(user: User) -> None:
-    """Send the password reset email with the frontend reset link."""
+def send_activation_email(user: User, token: str) -> None:
+    """Enqueue the activation email on the high-priority queue."""
+    queue = django_rq.get_queue("high")
+    queue.enqueue(send_activation_email_task, user.pk, token)
+
+
+def send_password_reset_email_task(user_pk: int) -> None:
+    """Render and send the password reset email. Runs in the RQ worker."""
+    user = User.objects.get(pk=user_pk)
     uidb64 = urlsafe_base64_encode(force_bytes(user.pk))
     token = default_token_generator.make_token(user)
     reset_link = (
@@ -77,3 +86,9 @@ def send_password_reset_email(user: User) -> None:
         html_message=html_message,
         fail_silently=False,
     )
+
+
+def send_password_reset_email(user: User) -> None:
+    """Enqueue the password reset email on the high-priority queue."""
+    queue = django_rq.get_queue("high")
+    queue.enqueue(send_password_reset_email_task, user.pk)

@@ -147,6 +147,13 @@ CACHES = {
 }
 
 RQ_QUEUES = {
+    "high": {
+        "HOST": os.environ.get("REDIS_HOST", default="redis"),
+        "PORT": os.environ.get("REDIS_PORT", default=6379),
+        "DB": os.environ.get("REDIS_DB", default=0),
+        "DEFAULT_TIMEOUT": 900,
+        "REDIS_CLIENT_KWARGS": {},
+    },
     "default": {
         "HOST": os.environ.get("REDIS_HOST", default="redis"),
         "PORT": os.environ.get("REDIS_PORT", default=6379),
@@ -200,7 +207,8 @@ STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
 # Email configuration
 # https://docs.djangoproject.com/en/6.0/topics/email/
-EMAIL_BACKEND = os.environ.get("EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend")
+EMAIL_BACKEND = os.environ.get(
+    "EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend")
 EMAIL_HOST = os.environ.get("EMAIL_HOST")
 EMAIL_PORT = int(os.environ.get("EMAIL_PORT", 587))
 EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER")
@@ -210,4 +218,5 @@ EMAIL_USE_SSL = os.environ.get("EMAIL_USE_SSL", "False") == "True"
 DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL")
 
 # Base URL of the frontend for building activation and password reset links
-FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:4200").rstrip("/")
+FRONTEND_URL = os.environ.get(
+    "FRONTEND_URL", "http://localhost:4200").rstrip("/")
