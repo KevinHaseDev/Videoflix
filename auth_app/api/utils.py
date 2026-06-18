@@ -41,7 +41,10 @@ def send_activation_email_task(user_pk: int, token: str) -> None:
     activation_link = (
         f"{settings.FRONTEND_URL}" f"/pages/auth/activate.html?uid={uidb64}&token={token}"
     )
-    context = {"activation_link": activation_link}
+    context = {
+        "activation_link": activation_link,
+        "user_name": user.get_full_name() or user.username,
+    }
     html_message = render_to_string("auth_app/emails/account_activation.html", context)
     send_mail(
         subject="Activate your Videoflix account",
