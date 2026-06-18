@@ -49,6 +49,22 @@ installed on your machine.
 
 - [Docker](https://docs.docker.com/get-docker/) and Docker Compose
 
+> **Windows users — line endings (LF):** This project requires Unix line endings
+> (LF). In particular `backend.entrypoint.sh` must stay LF — with Windows CRLF the
+> container fails to start (`not found` / `bad interpreter`). Git for Windows
+> defaults to `core.autocrlf=true`, which checks scripts out as CRLF, so set Git to
+> keep LF **before** cloning:
+>
+> ```bash
+> git config --global core.autocrlf input
+> ```
+>
+> If you have already cloned the repo, re-checkout the files afterwards:
+>
+> ```bash
+> git rm --cached -r . && git reset --hard
+> ```
+
 ### 1. Create the `.env` file
 
 Copy the template — then open `.env` and fill in your values (see
