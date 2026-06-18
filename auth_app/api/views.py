@@ -5,6 +5,7 @@ from django.contrib.auth.models import User
 from django.contrib.auth.tokens import default_token_generator
 from rest_framework import status
 from rest_framework.exceptions import ValidationError
+from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -12,7 +13,6 @@ from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from rest_framework_simplejwt.serializers import TokenRefreshSerializer
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from auth_app.api.permissions import AllowAnyAuth
 from auth_app.api.serializer import (
     LoginSerializer,
     PasswordConfirmSerializer,
@@ -30,7 +30,7 @@ from auth_app.api.utils import (
 class RegisterView(APIView):
     """POST /api/register/ — creates an inactive user and sends an activation email."""
 
-    permission_classes = [AllowAnyAuth]
+    permission_classes = [AllowAny]
 
     def post(self, request: Request) -> Response:
         """Validate input, create the user, and dispatch the activation email."""
@@ -48,7 +48,7 @@ class RegisterView(APIView):
 class ActivateView(APIView):
     """GET /api/activate/<uidb64>/<token>/ — activates a user account."""
 
-    permission_classes = [AllowAnyAuth]
+    permission_classes = [AllowAny]
 
     def get(self, _request: Request, uidb64: str, token: str) -> Response:
         """Verify the activation token and set the user's is_active flag."""
@@ -69,7 +69,7 @@ class ActivateView(APIView):
 class LoginView(APIView):
     """POST /api/login/ — authenticates a user and sets JWT HttpOnly cookies."""
 
-    permission_classes = [AllowAnyAuth]
+    permission_classes = [AllowAny]
 
     def post(self, request: Request) -> Response:
         """Validate credentials and issue JWT tokens as HttpOnly cookies."""
@@ -78,20 +78,22 @@ class LoginView(APIView):
         user = serializer.validated_data["user"]
         refresh = RefreshToken.for_user(user)
         response = Response(
-            {"detail": "Login successful", "user": {"id": user.id, "username": user.username}},
+            {"detail": "Login successful", "user": {
+                "id": user.id, "username": user.username}},
             status=status.HTTP_200_OK,
         )
         response.set_cookie(
             "access_token", str(refresh.access_token), **settings.AUTH_COOKIE_SETTINGS
         )
-        response.set_cookie("refresh_token", str(refresh), **settings.AUTH_COOKIE_SETTINGS)
+        response.set_cookie("refresh_token", str(refresh),
+                            **settings.AUTH_COOKIE_SETTINGS)
         return response
 
 
 class LogoutView(APIView):
     """POST /api/logout/ — blacklists the refresh token and clears auth cookies."""
 
-    permission_classes = [AllowAnyAuth]
+    permission_classes = [AllowAny]
 
     def post(self, request: Request) -> Response:
         """Blacklist the refresh token cookie and delete both auth cookies."""
@@ -125,7 +127,7 @@ class LogoutView(APIView):
 class CookieTokenRefreshView(APIView):
     """POST /api/token/refresh/ — issues a new access token from the refresh cookie."""
 
-    permission_classes = [AllowAnyAuth]
+    permission_classes = [AllowAny]
 
     def post(self, request: Request) -> Response:
         """Read the refresh cookie, validate it, and set a new access_token cookie."""
@@ -148,20 +150,22 @@ class CookieTokenRefreshView(APIView):
             {"detail": "Token refreshed", "access": access_token},
             status=status.HTTP_200_OK,
         )
-        response.set_cookie("access_token", access_token, **settings.AUTH_COOKIE_SETTINGS)
+        response.set_cookie("access_token", access_token,
+                            **settings.AUTH_COOKIE_SETTINGS)
         return response
 
 
 class PasswordResetView(APIView):
     """POST /api/password_reset/ — sends a password reset email if the user exists."""
 
-    permission_classes = [AllowAnyAuth]
+    permission_classes = [AllowAny]
 
     def post(self, request: Request) -> Response:
         """Dispatch a reset email when a matching user exists; always respond 200."""
         serializer = PasswordResetSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        user = User.objects.filter(email=serializer.validated_data["email"]).first()
+        user = User.objects.filter(
+            email=serializer.validated_data["email"]).first()
         if user is not None:
             send_password_reset_email(user)
         return Response(
@@ -173,7 +177,7 @@ class PasswordResetView(APIView):
 class PasswordConfirmView(APIView):
     """POST /api/password_confirm/<uidb64>/<token>/ — saves the new password."""
 
-    permission_classes = [AllowAnyAuth]
+    permission_classes = [AllowAny]
 
     def post(self, request: Request, uidb64: str, token: str) -> Response:
         """Validate the reset token and persist the new password."""
