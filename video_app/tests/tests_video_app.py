@@ -209,17 +209,22 @@ class VideoSignalTests(TestCase):
         mock_queue.assert_not_called()
 
     @patch("video_app.api.signals.django_rq.get_queue")
-    def test_delete_removes_file_and_hls_dir(self, _mock_queue):
-        """Deleting a video removes its source file and HLS output dir."""
+    def test_delete_removes_file_thumbnail_and_hls_dir(self, _mock_queue):
+        """Deleting a video removes its source file, thumbnail and HLS output dir."""
         video = Video.objects.create(
-            title="x", description="d", video_file="videos/v.mp4")
+            title="x", description="d", video_file="videos/v.mp4",
+            thumbnail="thumbnails/v.jpg")
         file_path = Path(settings.MEDIA_ROOT) / "videos" / "v.mp4"
         file_path.parent.mkdir(parents=True, exist_ok=True)
         file_path.write_bytes(b"data")
+        thumb_path = Path(settings.MEDIA_ROOT) / "thumbnails" / "v.jpg"
+        thumb_path.parent.mkdir(parents=True, exist_ok=True)
+        thumb_path.write_bytes(b"img")
         hls_dir = Path(settings.MEDIA_ROOT) / "videos" / str(video.pk)
         hls_dir.mkdir(parents=True, exist_ok=True)
         video.delete()
         self.assertFalse(file_path.exists())
+        self.assertFalse(thumb_path.exists())
         self.assertFalse(hls_dir.exists())
 
     @patch("video_app.api.signals.django_rq.get_queue")

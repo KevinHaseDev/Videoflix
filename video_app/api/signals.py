@@ -27,11 +27,15 @@ def video_post_save(sender, instance, created, **kwargs):
 
 @receiver(post_delete, sender=Video)
 def video_delete_signal(sender, instance, **kwargs):
-    """Delete the video file and HLS output directory on deletion."""
+    """Delete the thumbnail, video file and HLS output directory on deletion."""
     if instance.video_file:
         video_path = Path(instance.video_file.path)
         if video_path.is_file():
             video_path.unlink()
+    if instance.thumbnail:
+        thumb_path = Path(instance.thumbnail.path)
+        if thumb_path.is_file():
+            thumb_path.unlink()
     hls_dir = settings.MEDIA_ROOT / "videos" / str(instance.pk)
     if hls_dir.is_dir():
         shutil.rmtree(hls_dir)
