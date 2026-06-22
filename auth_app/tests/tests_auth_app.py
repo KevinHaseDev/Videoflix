@@ -87,6 +87,18 @@ class AuthEmailTaskTests(TestCase):
             username="mail@example.com", email="mail@example.com")
         mail.outbox = []
 
+    def _assert_inline_logo(self, message):
+        """Assert the logo is embedded inline and referenced from the HTML body."""
+        mime = message.message()
+        images = [p for p in mime.walk() if p.get_content_type() == "image/png"]
+        self.assertEqual(len(images), 1)
+        logo = images[0]
+        self.assertEqual(logo.get_content_disposition(), "inline")
+        cid = logo.get("Content-ID")
+        self.assertTrue(cid)
+        html_body, _ = message.alternatives[0]
+        self.assertIn(f"cid:{cid[1:-1]}", html_body)
+
     def test_activation_email_task_sends_mail(self):
         """The activation task sends the email to the user with an HTML alternative."""
         token = account_activation_token.make_token(self.user)
@@ -96,6 +108,7 @@ class AuthEmailTaskTests(TestCase):
         self.assertEqual(message.to, ["mail@example.com"])
         self.assertIn("Activate", message.subject)
         self.assertTrue(message.alternatives)
+        self._assert_inline_logo(message)
 
     def test_password_reset_email_task_sends_mail(self):
         """The password reset task sends the email to the user with an HTML alternative."""
@@ -105,6 +118,7 @@ class AuthEmailTaskTests(TestCase):
         self.assertEqual(message.to, ["mail@example.com"])
         self.assertIn("Reset", message.subject)
         self.assertTrue(message.alternatives)
+        self._assert_inline_logo(message)
 
 
 class AuthEmailDispatchTests(TestCase):

@@ -1,4 +1,4 @@
-{% extends "auth_app/emails/base_email.html" %}
+{% extends "email/base_email.html" %}
 
 {% block title %}Activate your Videoflix account{% endblock %}
 
@@ -6,7 +6,9 @@
 
 {% block header %}
   <div style="text-align:center; padding:8px 0 36px 0;">
-    {% include "auth_app/emails/Logo.svg" %}
+    <img src="cid:logo" alt="Videoflix" width="251" height="40"
+         style="display:inline-block; width:251px; height:40px; border:0;
+                outline:none; text-decoration:none;" />
   </div>
 {% endblock %}
 
