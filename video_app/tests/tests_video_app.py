@@ -169,11 +169,13 @@ class VideoServiceTests(TestCase):
 
     @patch("video_app.api.service.subprocess.run")
     def test_extract_thumbnail_saves_thumbnail(self, mock_run):
-        """ffmpeg is invoked and the extracted frame is stored as thumbnail."""
+        """ffmpeg is invoked and the frame is stored under a title-based name."""
         extract_thumbnail(self.video.pk)
         mock_run.assert_called_once()
         self.video.refresh_from_db()
         self.assertTrue(self.video.thumbnail)
+        self.assertEqual(
+            Path(self.video.thumbnail.name).name, "x_thumbnail.jpg")
 
     @patch("video_app.api.service.subprocess.run")
     def test_convert_video_to_hls_runs_per_resolution(self, mock_run):

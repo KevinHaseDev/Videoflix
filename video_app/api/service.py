@@ -6,6 +6,7 @@ from pathlib import Path
 
 from django.conf import settings
 from django.core.files import File
+from django.utils.text import slugify
 
 from video_app.models import Video
 
@@ -32,8 +33,9 @@ def extract_thumbnail(video_id: int) -> None:
             ],
             check=True,
         )
+        filename = f"{slugify(video.title) or video_id}_thumbnail.jpg"
         with tmp_path.open("rb") as f:
-            video.thumbnail.save(f"{video_id}.jpg", File(f), save=True)
+            video.thumbnail.save(filename, File(f), save=True)
     finally:
         tmp_path.unlink(missing_ok=True)
 
