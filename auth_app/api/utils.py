@@ -45,7 +45,8 @@ def send_activation_email_task(user_pk: int, token: str) -> None:
         "activation_link": activation_link,
         "user_name": user.get_full_name() or user.username,
     }
-    html_message = render_to_string("auth_app/emails/account_activation.html", context)
+    html_message = render_to_string(
+        "auth_app/emails/account_activation.html", context)
     send_mail(
         subject="Activate your Videoflix account",
         message=(
@@ -75,7 +76,8 @@ def send_password_reset_email_task(user_pk: int) -> None:
         f"{settings.FRONTEND_URL}" f"/pages/auth/confirm_password.html?uid={uidb64}&token={token}"
     )
     context = {"reset_link": reset_link}
-    html_message = render_to_string("auth_app/emails/password_reset.html", context)
+    html_message = render_to_string(
+        "auth_app/emails/password_reset.html", context)
     send_mail(
         subject="Reset your Videoflix password",
         message=(

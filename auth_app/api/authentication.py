@@ -36,7 +36,8 @@ class AutoRefreshAccessTokenMiddleware:
         new_access = self._renew_if_needed(request)
         response = self.get_response(request)
         if new_access is not None:
-            response.set_cookie("access_token", new_access, **settings.AUTH_COOKIE_SETTINGS)
+            response.set_cookie("access_token", new_access,
+                                **settings.AUTH_COOKIE_SETTINGS)
         return response
 
     @staticmethod

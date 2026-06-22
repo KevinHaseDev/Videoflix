@@ -61,7 +61,8 @@ class AccountActivationTokenTests(TestCase):
 
     def setUp(self):
         """Create an inactive user to issue tokens for."""
-        self.user = User.objects.create_user(username="token@example.com", is_active=False)
+        self.user = User.objects.create_user(
+            username="token@example.com", is_active=False)
 
     def test_token_is_valid_for_unchanged_user(self):
         """A freshly issued token validates for the same user."""
@@ -73,7 +74,8 @@ class AccountActivationTokenTests(TestCase):
         token = account_activation_token.make_token(self.user)
         self.user.is_active = True
         self.user.save()
-        self.assertFalse(account_activation_token.check_token(self.user, token))
+        self.assertFalse(
+            account_activation_token.check_token(self.user, token))
 
 
 class AuthEmailTaskTests(TestCase):
@@ -81,7 +83,8 @@ class AuthEmailTaskTests(TestCase):
 
     def setUp(self):
         """Create a user and reset the mail outbox."""
-        self.user = User.objects.create_user(username="mail@example.com", email="mail@example.com")
+        self.user = User.objects.create_user(
+            username="mail@example.com", email="mail@example.com")
         mail.outbox = []
 
     def test_activation_email_task_sends_mail(self):
@@ -109,7 +112,8 @@ class AuthEmailDispatchTests(TestCase):
 
     def setUp(self):
         """Create a user to dispatch emails for."""
-        self.user = User.objects.create_user(username="mail@example.com", email="mail@example.com")
+        self.user = User.objects.create_user(
+            username="mail@example.com", email="mail@example.com")
 
     @patch("auth_app.api.utils.django_rq.get_queue")
     def test_send_activation_email_enqueues_on_high_queue(self, mock_get_queue):
@@ -223,7 +227,8 @@ class PasswordResetSerializerTests(TestCase):
 
     def test_valid_email_passes(self):
         """A well-formed email address validates."""
-        serializer = PasswordResetSerializer(data={"email": "user@example.com"})
+        serializer = PasswordResetSerializer(
+            data={"email": "user@example.com"})
         self.assertTrue(serializer.is_valid(), serializer.errors)
 
     def test_invalid_email_is_rejected(self):
@@ -284,7 +289,8 @@ class RegisterViewTests(APITestCase):
 
     def test_register_duplicate_email_returns_400(self):
         """Registering an existing email returns 400."""
-        User.objects.create_user(username="dup@example.com", email="dup@example.com")
+        User.objects.create_user(
+            username="dup@example.com", email="dup@example.com")
         data = {
             "email": "dup@example.com",
             "password": VALID_PASSWORD,
@@ -365,7 +371,8 @@ class LogoutViewTests(APITestCase):
     def setUp(self):
         """Create an active user and resolve the logout URL."""
         self.url = reverse("logout")
-        self.user = User.objects.create_user(username="logout@example.com", is_active=True)
+        self.user = User.objects.create_user(
+            username="logout@example.com", is_active=True)
 
     def test_logout_with_valid_token_returns_200(self):
         """A valid refresh cookie blacklists the token and returns 200."""
@@ -392,7 +399,8 @@ class TokenRefreshViewTests(APITestCase):
     def setUp(self):
         """Create an active user and resolve the refresh URL."""
         self.url = reverse("token_refresh")
-        self.user = User.objects.create_user(username="refresh@example.com", is_active=True)
+        self.user = User.objects.create_user(
+            username="refresh@example.com", is_active=True)
 
     def test_refresh_sets_new_access_cookie(self):
         """A valid refresh cookie returns 200 and sets a new access cookie."""
@@ -425,7 +433,8 @@ class PasswordResetViewTests(APITestCase):
     @patch("auth_app.api.utils.django_rq.get_queue")
     def test_reset_sends_email_for_existing_user(self, mock_get_queue):
         """A known email enqueues a reset email and returns 200."""
-        User.objects.create_user(username="reset@example.com", email="reset@example.com")
+        User.objects.create_user(
+            username="reset@example.com", email="reset@example.com")
         response = self.client.post(self.url, {"email": "reset@example.com"})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         mock_get_queue.return_value.enqueue.assert_called_once()
@@ -461,14 +470,16 @@ class PasswordConfirmViewTests(APITestCase):
     def test_confirm_success_changes_password(self):
         """A valid token sets the new password and returns 200."""
         token = default_token_generator.make_token(self.user)
-        response = self.client.post(self._url(self.uidb64, token), self._payload())
+        response = self.client.post(
+            self._url(self.uidb64, token), self._payload())
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.user.refresh_from_db()
         self.assertTrue(self.user.check_password("NewPass!2024word"))
 
     def test_confirm_invalid_token_returns_400(self):
         """An invalid token returns 400."""
-        response = self.client.post(self._url(self.uidb64, "bad-token"), self._payload())
+        response = self.client.post(
+            self._url(self.uidb64, "bad-token"), self._payload())
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_confirm_invalid_uid_returns_400(self):
@@ -485,7 +496,8 @@ class CookieJWTAuthenticationTests(TestCase):
     def setUp(self):
         """Create a user, request factory, and the authenticator."""
         self.factory = RequestFactory()
-        self.user = User.objects.create_user(username="jwt@example.com", is_active=True)
+        self.user = User.objects.create_user(
+            username="jwt@example.com", is_active=True)
         self.auth = CookieJWTAuthentication()
 
     def test_no_cookie_returns_none(self):
@@ -507,7 +519,8 @@ class AutoRefreshMiddlewareTests(TestCase):
     def setUp(self):
         """Create a user and a request factory."""
         self.factory = RequestFactory()
-        self.user = User.objects.create_user(username="mw@example.com", is_active=True)
+        self.user = User.objects.create_user(
+            username="mw@example.com", is_active=True)
 
     def _run(self, cookies):
         """Run the middleware with the given request cookies."""

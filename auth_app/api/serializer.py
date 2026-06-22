@@ -26,7 +26,8 @@ class RegisterSerializer(serializers.ModelSerializer):
     def validate(self, attrs: dict) -> dict:
         """Ensure passwords match and satisfy Django's password validators."""
         if attrs["password"] != attrs["confirmed_password"]:
-            raise serializers.ValidationError({"confirmed_password": "Passwords do not match."})
+            raise serializers.ValidationError(
+                {"confirmed_password": "Passwords do not match."})
         validate_password(attrs["password"])
         return attrs
 
@@ -71,6 +72,7 @@ class PasswordConfirmSerializer(serializers.Serializer):
     def validate(self, attrs: dict) -> dict:
         """Ensure both passwords match and pass Django's password validators."""
         if attrs["new_password"] != attrs["confirm_password"]:
-            raise serializers.ValidationError({"confirm_password": "Passwords do not match."})
+            raise serializers.ValidationError(
+                {"confirm_password": "Passwords do not match."})
         validate_password(attrs["new_password"])
         return attrs

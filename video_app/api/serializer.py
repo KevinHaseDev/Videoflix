@@ -12,7 +12,8 @@ class VideoSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Video
-        fields = ["id", "created_at", "title", "description", "thumbnail_url", "category"]
+        fields = ["id", "created_at", "title",
+                  "description", "thumbnail_url", "category"]
 
     def get_thumbnail_url(self, obj):
         """Return the absolute URL of the thumbnail, or None if not set."""

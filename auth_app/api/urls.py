@@ -14,7 +14,8 @@ from .views import (
 
 urlpatterns = [
     path("register/", RegisterView.as_view(), name="register"),
-    path("activate/<str:uidb64>/<str:token>/", ActivateView.as_view(), name="activate"),
+    path("activate/<str:uidb64>/<str:token>/",
+         ActivateView.as_view(), name="activate"),
     path("login/", LoginView.as_view(), name="login"),
     path("logout/", LogoutView.as_view(), name="logout"),
     path("token/refresh/", CookieTokenRefreshView.as_view(), name="token_refresh"),

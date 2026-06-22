@@ -158,7 +158,7 @@ RQ_QUEUES = {
         "HOST": os.environ.get("REDIS_HOST", default="redis"),
         "PORT": os.environ.get("REDIS_PORT", default=6379),
         "DB": os.environ.get("REDIS_DB", default=0),
-        "DEFAULT_TIMEOUT": 900,
+        "DEFAULT_TIMEOUT": 1800,
         "REDIS_CLIENT_KWARGS": {},
     },
 }
