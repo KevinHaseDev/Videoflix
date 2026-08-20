@@ -1,0 +1,52 @@
+# Produktions-Setup fuer Videoflix auf dem Hetzner-Server.
+#
+# Aufruf:  docker compose -f docker-compose.prod.yml up -d --build
+#
+# Unterschiede zur docker-compose.yml (Entwicklung):
+#   - Port nur auf 127.0.0.1 gebunden; nginx auf dem Host terminiert TLS
+#   - kein Bind-Mount des Quellcodes und kein gunicorn --reload
+#   - media/ als Bind-Mount, damit nginx die Thumbnails ausliefern kann
+#   - restart-Policy, damit alle Container einen Reboot ueberleben
+#   - feste Image-Versionen und korrekter Postgres-Datenpfad
+
+services:
+
+  db:
+    image: postgres:17-alpine
+    container_name: videoflix_database
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    container_name: videoflix_redis
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+
+  web:
+    build:
+      context: .
+      dockerfile: backend.Dockerfile
+    container_name: videoflix_backend
+    restart: unless-stopped
+    env_file: .env
+    entrypoint: ["sh", "./backend.entrypoint.prod.sh"]
+    environment:
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - /var/www/Videoflix/media:/app/media
+    ports:
+      - "127.0.0.1:8001:8000"
+    depends_on:
+      - db
+      - redis
+
+volumes:
+  postgres_data:
+  redis_data:
